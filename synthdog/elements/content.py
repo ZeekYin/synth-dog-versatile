@@ -67,6 +67,20 @@ class TextReader:
         self.cache.move_to_end(key)
         char = text[self.idx % self.block_size]
         return char
+    
+    def move_to_line_by_random_position(self):
+
+        random_position = np.random.randint(self.length)  
+        self.fp.seek(random_position, 0) 
+
+        # 向前扫描找到行头
+        while random_position > 0:
+            self.fp.seek(random_position - 1, 0)
+            char = self.fp.read(1)
+            if char == '\n': 
+                break
+            random_position -= 1
+        self.idx = random_position
 
 
 class Content:
@@ -88,31 +102,36 @@ class Content:
         layout_height = max(height - layout_top * 2, 0)
         layout_bbox = [layout_left, layout_top, layout_width, layout_height]
 
-        text_layers, texts = [], []
+        text_layers, text_in_imgs, text_in_outputs = [], [], []
         layouts = self.layout.generate(layout_bbox)
-        self.reader.move(np.random.randint(len(self.reader)))
+        #self.reader.move(np.random.randint(len(self.reader)))
+        while True:
+            self.reader.move_to_line_by_random_position()
+            for layout in layouts:
+                font = self.font.sample()
 
-        for layout in layouts:
-            font = self.font.sample()
+                for bbox, align in layout:
+                    x, y, w, h = bbox
+                    text_layer, text_in_img, text_in_output = self.textbox.generate((w, h), self.reader, font)
+                    # add parsing code for jsonl
+                    self.reader.prev()
 
-            for bbox, align in layout:
-                x, y, w, h = bbox
-                text_layer, text = self.textbox.generate((w, h), self.reader, font)
-                self.reader.prev()
+                    if text_layer is None:
+                        continue
 
-                if text_layer is None:
-                    continue
+                    text_layer.center = (x + w / 2, y + h / 2)
+                    if align == "left":
+                        text_layer.left = x
+                    if align == "right":
+                        text_layer.right = x + w
 
-                text_layer.center = (x + w / 2, y + h / 2)
-                if align == "left":
-                    text_layer.left = x
-                if align == "right":
-                    text_layer.right = x + w
-
-                self.textbox_color.apply([text_layer])
-                text_layers.append(text_layer)
-                texts.append(text)
+                    self.textbox_color.apply([text_layer])
+                    text_layers.append(text_layer)
+                    text_in_imgs.append(text_in_img)
+                    text_in_outputs.append(text_in_output)
+            if len(text_layers) > 0:
+                break
 
         self.content_color.apply(text_layers)
 
-        return text_layers, texts
+        return text_layers, text_in_imgs, text_in_outputs

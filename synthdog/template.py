@@ -51,7 +51,7 @@ class SynthDoG(templates.Template):
         size = (long_size, short_size) if landscape else (short_size, long_size)
 
         bg_layer = self.background.generate(size)
-        paper_layer, text_layers, texts = self.document.generate(size)
+        paper_layer, text_layers, text_in_imgs, text_in_outputs = self.document.generate(size)
 
         document_group = layers.Group([*text_layers, paper_layer])
         document_space = np.clip(size - document_group.size, 0, None)
@@ -63,14 +63,21 @@ class SynthDoG(templates.Template):
         self.effect.apply([layer])
 
         image = layer.output(bbox=[0, 0, *size])
-        label = " ".join(texts)
-        label = label.strip()
-        label = re.sub(r"\s+", " ", label)
+
+
+        label_img = " ".join(text_in_imgs)
+        label_img = label.strip()
+        label_img = re.sub(r"\s+", " ", label)
         quality = np.random.randint(self.quality[0], self.quality[1] + 1)
+
+        label_output = " ".join(text_in_outputs)
+        label_output = label_output.strip()
+        label_output = re.sub(r"\s+", " ", label_output)
 
         data = {
             "image": image,
-            "label": label,
+            "label_img": label_img,
+            "label_output": label_output,
             "quality": quality,
             "roi": roi,
         }
@@ -83,7 +90,8 @@ class SynthDoG(templates.Template):
 
     def save(self, root, data, idx):
         image = data["image"]
-        label = data["label"]
+        label_img = data["label_img"]
+        label_output = data["label_output"]
         quality = data["quality"]
         roi = data["roi"]
 
@@ -103,7 +111,7 @@ class SynthDoG(templates.Template):
         metadata_filepath = os.path.join(output_dirpath, metadata_filename)
         os.makedirs(os.path.dirname(metadata_filepath), exist_ok=True)
 
-        metadata = self.format_metadata(image_filename=image_filename, keys=["text_sequence"], values=[label])
+        metadata = self.format_metadata(image_filename=image_filename, keys=["text_sequence"], values=[label_img, label_output])
         with open(metadata_filepath, "a") as fp:
             json.dump(metadata, fp, ensure_ascii=False)
             fp.write("\n")
