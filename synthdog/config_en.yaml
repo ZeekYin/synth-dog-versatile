@@ -32,9 +32,9 @@ document:
   content:
     margin: [0, 0.1]
     text:
-      path: resources/corpus/enwiki.txt
+      path: resources/corpus/train.jsonl
     font:
-      paths: [resources/font/en]
+      paths: [resources/font/ja]
       weights: [1]
       bold: 0
     layout:

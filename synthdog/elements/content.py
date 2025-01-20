@@ -10,8 +10,35 @@ from synthtiger import components
 
 from elements.textbox import TextBox
 from layouts import GridStack
+import json
 
-
+class IteratableText:
+    def __init__(self, text):
+        self.text = text
+        self.idx = 0
+    def __len__(self):
+        return len(self.text)
+    def __iter__(self):
+        return self
+    def __next__(self):
+        if self.idx >= len(self.text):
+            char = "\n"
+        else:
+            char = self.get()
+            self.next()
+        return char
+    
+    def move(self, idx):
+        self.idx = idx
+    def next(self):
+        self.idx = self.idx + 1
+    def prev(self):
+        self.idx = (self.idx - 1) if self.idx > 0 else 0
+    def get(self):
+        char = self.text[self.idx]
+        return char
+    def finished(self):
+        return self.idx >= len(self.text)
 class TextReader:
     def __init__(self, path, cache_size=2 ** 28, block_size=2 ** 20):
         self.fp = open(path, "r", encoding="utf-8")
@@ -105,32 +132,53 @@ class Content:
         text_layers, text_in_imgs, text_in_outputs = [], [], []
         layouts = self.layout.generate(layout_bbox)
         #self.reader.move(np.random.randint(len(self.reader)))
-        while True:
+
+        for layout in layouts:
+            font = self.font.sample()
+
+            #take 1 jsonl line from the text file
+            tmp_chars = []
             self.reader.move_to_line_by_random_position()
-            for layout in layouts:
-                font = self.font.sample()
+            for char in self.reader:
+                if char in "\r\n":
+                    break
+                tmp_chars.append(char)
+            jsonl_text = "".join(tmp_chars).strip()
+            record = json.loads(jsonl_text)
 
-                for bbox, align in layout:
-                    x, y, w, h = bbox
-                    text_layer, text_in_img, text_in_output = self.textbox.generate((w, h), self.reader, font)
-                    # add parsing code for jsonl
-                    self.reader.prev()
+            text = record["text_in_img"]
+            text_in_output = record["text_in_output"]
 
-                    if text_layer is None:
-                        continue
+            Itertext = IteratableText(text)
+            
+            #
+            temp_text_layers = []
+            temp_text_in_imgs = []
+            temp_text_in_outputs = []
+            for bbox, align in layout:
+                x, y, w, h = bbox
+                text_layer, text_in_img = self.textbox.generate((w, h), Itertext, font)
+                #self.reader.prev()
+                #Itertext.prev()
 
-                    text_layer.center = (x + w / 2, y + h / 2)
-                    if align == "left":
-                        text_layer.left = x
-                    if align == "right":
-                        text_layer.right = x + w
+                if text_layer is None:
+                    #print("text_layer is None")
+                    continue
 
-                    self.textbox_color.apply([text_layer])
-                    text_layers.append(text_layer)
-                    text_in_imgs.append(text_in_img)
-                    text_in_outputs.append(text_in_output)
-            if len(text_layers) > 0:
-                break
+                text_layer.center = (x + w / 2, y + h / 2)
+                if align == "left":
+                    text_layer.left = x
+                if align == "right":
+                    text_layer.right = x + w
+
+                self.textbox_color.apply([text_layer])
+                temp_text_layers.append(text_layer)
+                temp_text_in_imgs.append(text_in_img)
+            if Itertext.finished():
+                text_layers.extend(temp_text_layers)
+                text_in_imgs.extend(temp_text_in_imgs)
+                text_in_outputs.append(text_in_output)
+
 
         self.content_color.apply(text_layers)
 
